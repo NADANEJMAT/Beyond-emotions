@@ -179,8 +179,8 @@ else:
 
         return pipeline(
             "text-classification",
-            model="fine_tuned_emotion_model",
-            tokenizer="fine_tuned_emotion_model",
+            model="nadanejmat/beyond-emotions-model",
+tokenizer="nadanejmat/beyond-emotions-model",
             device=-1
         )
 
