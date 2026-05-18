@@ -10,11 +10,9 @@ Original file is located at
 import streamlit as st
 from transformers import pipeline
 from deep_translator import GoogleTranslator
-import torch
 import os
 import requests
 from PIL import Image
-import random
 import io
 
 st.set_page_config(
@@ -30,10 +28,7 @@ if not st.session_state.started:
 
     st.markdown("""
     <style>
-
-    .stApp {
-        background-color: #f6f1ea;
-    }
+    .stApp { background-color: #f6f1ea; }
 
     .main-title {
         text-align: center;
@@ -76,7 +71,6 @@ if not st.session_state.started:
         font-weight: bold !important;
         padding: 12px 24px !important;
     }
-
     </style>
     """, unsafe_allow_html=True)
 
@@ -100,41 +94,25 @@ if not st.session_state.started:
     cols = st.columns([1, 1, 1, 1], gap="large")
 
     for col, (name, artist, img) in zip(cols, paintings):
-
         with col:
-
             st.image(img, use_container_width=True)
-
-            st.markdown(
-                f"<div class='card-title'>{name}</div>",
-                unsafe_allow_html=True
-            )
-
-            st.markdown(
-                f"<div class='card-artist'>{artist}</div>",
-                unsafe_allow_html=True
-            )
+            st.markdown(f"<div class='card-title'>{name}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='card-artist'>{artist}</div>", unsafe_allow_html=True)
 
     st.markdown("<br><br>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([3, 1, 3])
 
     with col2:
-
         if st.button("✨ Explore More", use_container_width=True):
-
             st.session_state.started = True
-
             st.rerun()
 
 else:
 
     st.markdown("""
     <style>
-
-    .stApp {
-        background-color: #f6f1ea;
-    }
+    .stApp { background-color: #f6f1ea; }
 
     .title {
         text-align: center;
@@ -161,13 +139,26 @@ else:
         font-weight: bold !important;
     }
 
+    .result-card {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        margin-top: 20px;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.10);
+    }
+
+    .prompt-box {
+        background: #fff8ea;
+        padding: 16px;
+        border-radius: 14px;
+        margin-top: 15px;
+        border-left: 5px solid #c9983d;
+    }
     </style>
     """, unsafe_allow_html=True)
 
     if st.button("⬅️ Back to Gallery"):
-
         st.session_state.started = False
-
         st.rerun()
 
     st.markdown('<div class="title">🎨 Beyond Emotions</div>', unsafe_allow_html=True)
@@ -179,7 +170,6 @@ else:
 
     @st.cache_resource
     def load_emotion():
-
         return pipeline(
             "text-classification",
             model="nadanejmat/beyond-emotions-model",
@@ -188,59 +178,133 @@ else:
         )
 
     HF_TOKEN = os.environ.get("HF_TOKEN")
-
     API_URL = "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5"
 
     def generate_image_api(prompt):
+
+        if not HF_TOKEN:
+            st.error("HF_TOKEN is missing. Please add it in Render Environment Variables.")
+            return None
 
         headers = {
             "Authorization": f"Bearer {HF_TOKEN}"
         }
 
         payload = {
-            "inputs": prompt
+            "inputs": prompt,
+            "options": {
+                "wait_for_model": True
+            }
         }
 
-        response = requests.post(
-            API_URL,
-            headers=headers,
-            json=payload,
-            timeout=300
-        )
+        try:
+            response = requests.post(
+                API_URL,
+                headers=headers,
+                json=payload,
+                timeout=300
+            )
 
-        image = Image.open(io.BytesIO(response.content))
+            if response.status_code != 200:
+                st.error("Image generation API error:")
+                st.write(response.text)
+                return None
 
-        return image
+            content_type = response.headers.get("content-type", "")
+
+            if "image" not in content_type:
+                st.error("The API did not return an image.")
+                st.write(response.text)
+                return None
+
+            image = Image.open(io.BytesIO(response.content))
+            return image
+
+        except requests.exceptions.Timeout:
+            st.error("Image generation took too long. Please try again.")
+            return None
+
+        except Exception as e:
+            st.error(f"Unexpected error: {e}")
+            return None
 
     def is_arabic(text):
-
         arabic_chars = sum(1 for c in text if '\u0600' <= c <= '\u06FF')
-
         return len(text) > 0 and arabic_chars / len(text) > 0.3
 
     def translate_to_english(text):
-
         try:
-            return GoogleTranslator(
-                source='auto',
-                target='en'
-            ).translate(text)
-
+            return GoogleTranslator(source="auto", target="en").translate(text)
         except Exception:
             return text
 
-    emotion_prompts = {
-        "joy": "A vibrant joyful artistic painting, bright warm colors, happiness, magical atmosphere",
-        "sadness": "A melancholic emotional artwork, soft blue tones, rainy atmosphere, expressive painting",
-        "anger": "An intense dramatic artwork, fiery colors, chaos, emotional expressionism",
-        "fear": "A dark mysterious emotional scene, cinematic shadows, psychological tension",
-        "love": "A romantic artistic masterpiece, dreamy lighting, emotional warmth, elegant painting",
-        "surprise": "A surreal imaginative artwork, unexpected magical elements, fantasy style"
-    }
+    def normalize_emotion(emotion):
+        mapping = {
+            "sadness": "sadness",
+            "joy": "joy",
+            "anger": "anger",
+            "fear": "fear",
+            "love": "love",
+            "surprise": "awe"
+        }
+        return mapping.get(emotion.lower(), "something_else")
+
+    def direct_emotion_input(text):
+        text = text.lower().strip()
+
+        direct_map = {
+            "sad": "sadness",
+            "sadness": "sadness",
+            "happy": "joy",
+            "joy": "joy",
+            "angry": "anger",
+            "anger": "anger",
+            "fear": "fear",
+            "afraid": "fear",
+            "love": "love",
+            "surprise": "awe",
+            "surprised": "awe",
+            "awe": "awe",
+            "funny": "amusement",
+            "amusement": "amusement",
+            "laugh": "amusement",
+            "regret": "regret",
+            "remorse": "regret",
+            "guilty": "regret"
+        }
+
+        return direct_map.get(text, None)
+
+    def emotion_to_prompt(emotion):
+        prompts = {
+            "joy": "a magical sunrise over flower fields, glowing golden light, dreamy fantasy atmosphere, cinematic art, highly detailed, 4k",
+            "sadness": "a lonely figure standing in rain at night, blue cinematic tones, emotional digital painting, highly detailed, 4k",
+            "anger": "a warrior surrounded by fire and smoke, intense dramatic lighting, chaotic atmosphere, cinematic digital art, 4k",
+            "fear": "a dark haunted forest with glowing eyes between trees, horror atmosphere, cinematic lighting, highly detailed, 4k",
+            "love": "two souls meeting under glowing stars, romantic fantasy atmosphere, soft golden lighting, highly detailed, 4k",
+            "awe": "a giant glowing galaxy above snowy mountains, breathtaking fantasy landscape, cinematic atmosphere, 4k",
+            "amusement": "a playful colorful carnival at night, glowing lights, cheerful mood, whimsical digital illustration, 4k",
+            "regret": "a person sitting alone beside old letters, faded colors, nostalgic atmosphere, cinematic emotional painting, 4k",
+            "something_else": "abstract emotional energy waves, surreal colors, dreamlike artistic atmosphere, modern digital art, 4k"
+        }
+
+        return prompts.get(emotion, prompts["something_else"])
 
     text = st.text_area(
         "Enter your feeling (Arabic or English):",
         height=150
+    )
+
+    art_style = st.selectbox(
+        "Choose Art Style:",
+        [
+            "Digital Art",
+            "Oil Painting",
+            "Watercolor",
+            "Fantasy Art",
+            "Cinematic",
+            "Surrealism"
+        ]
     )
 
     if st.button("🎨 Generate Artwork"):
@@ -256,31 +320,58 @@ else:
                 else:
                     processed_text = text
 
-                result = emotion_model(processed_text)[0]
+                direct_emotion = direct_emotion_input(processed_text)
 
-                emotion = result["label"]
+                if direct_emotion:
+                    raw_emotion = direct_emotion
+                    emotion = direct_emotion
+                    confidence = 1.0
+                else:
+                    result = emotion_model(processed_text)[0]
+                    raw_emotion = result["label"]
+                    emotion = normalize_emotion(raw_emotion)
+                    confidence = result["score"]
 
-                confidence = result["score"]
+                prompt = emotion_to_prompt(emotion)
+                prompt = prompt + f", {art_style} style"
 
-            st.write("Detected Emotion:", emotion)
-
+            st.markdown('<div class="result-card">', unsafe_allow_html=True)
+            st.write("Original Text:", text)
+            st.write("Translated / Processed Text:", processed_text)
+            st.write("Detected Emotion:", raw_emotion)
+            st.write("Final Emotion:", emotion)
             st.write("Confidence:", round(confidence * 100, 2), "%")
+            st.progress(float(confidence))
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            prompt = emotion_prompts.get(
-                emotion.lower(),
-                "A surreal emotional artistic masterpiece"
-            )
+            st.markdown('<div class="prompt-box">', unsafe_allow_html=True)
+            st.write("Generated Prompt:")
+            st.write(prompt)
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            with st.spinner("Generating artwork..."):
-
+            with st.spinner("Generating artwork... this may take up to 1 minute"):
                 image = generate_image_api(prompt)
 
-            st.image(
-                image,
-                caption=f"Generated artwork for emotion: {emotion}",
-                use_container_width=True
-            )
+            if image is not None:
+
+                col1, col2, col3 = st.columns([1, 1.6, 1])
+
+                with col2:
+                    st.image(
+                        image,
+                        caption="AI-generated emotional artwork",
+                        use_container_width=True
+                    )
+
+                    img_bytes = io.BytesIO()
+                    image.save(img_bytes, format="PNG")
+
+                    st.download_button(
+                        label="💾 Download Artwork",
+                        data=img_bytes.getvalue(),
+                        file_name="beyond_emotions_art.png",
+                        mime="image/png"
+                    )
 
         else:
-
             st.warning("Please write something first.")
