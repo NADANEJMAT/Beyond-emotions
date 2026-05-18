@@ -184,7 +184,6 @@ tokenizer="nadanejmat/beyond-emotions-model",
             device=-1
         )
 
-    emotion_model = load_emotion()
 
     def is_arabic(text):
 
@@ -213,7 +212,9 @@ tokenizer="nadanejmat/beyond-emotions-model",
         if text.strip():
 
             with st.spinner("Analyzing emotion..."):
-
+                
+                emotion_model = load_emotion()
+                
                 if is_arabic(text):
                     processed_text = translate_to_english(text)
                 else:
