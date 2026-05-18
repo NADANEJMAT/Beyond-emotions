@@ -1,11 +1,8 @@
 streamlit
 transformers
 torch
-diffusers
-accelerate
 deep-translator
 sentencepiece
 Pillow
 safetensors
-scikit-learn
-datasets
+requests
