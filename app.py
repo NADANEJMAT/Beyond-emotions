@@ -11,6 +11,9 @@ import streamlit as st
 from transformers import pipeline
 from deep_translator import GoogleTranslator
 import torch
+import os
+import requests
+from PIL import Image
 import random
 import io
 
@@ -180,10 +183,34 @@ else:
         return pipeline(
             "text-classification",
             model="nadanejmat/beyond-emotions-model",
-tokenizer="nadanejmat/beyond-emotions-model",
+            tokenizer="nadanejmat/beyond-emotions-model",
             device=-1
         )
 
+    HF_TOKEN = os.environ.get("HF_TOKEN")
+
+    API_URL = "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5"
+
+    def generate_image_api(prompt):
+
+        headers = {
+            "Authorization": f"Bearer {HF_TOKEN}"
+        }
+
+        payload = {
+            "inputs": prompt
+        }
+
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            json=payload,
+            timeout=300
+        )
+
+        image = Image.open(io.BytesIO(response.content))
+
+        return image
 
     def is_arabic(text):
 
@@ -202,6 +229,15 @@ tokenizer="nadanejmat/beyond-emotions-model",
         except Exception:
             return text
 
+    emotion_prompts = {
+        "joy": "A vibrant joyful artistic painting, bright warm colors, happiness, magical atmosphere",
+        "sadness": "A melancholic emotional artwork, soft blue tones, rainy atmosphere, expressive painting",
+        "anger": "An intense dramatic artwork, fiery colors, chaos, emotional expressionism",
+        "fear": "A dark mysterious emotional scene, cinematic shadows, psychological tension",
+        "love": "A romantic artistic masterpiece, dreamy lighting, emotional warmth, elegant painting",
+        "surprise": "A surreal imaginative artwork, unexpected magical elements, fantasy style"
+    }
+
     text = st.text_area(
         "Enter your feeling (Arabic or English):",
         height=150
@@ -212,9 +248,9 @@ tokenizer="nadanejmat/beyond-emotions-model",
         if text.strip():
 
             with st.spinner("Analyzing emotion..."):
-                
+
                 emotion_model = load_emotion()
-                
+
                 if is_arabic(text):
                     processed_text = translate_to_english(text)
                 else:
@@ -229,6 +265,21 @@ tokenizer="nadanejmat/beyond-emotions-model",
             st.write("Detected Emotion:", emotion)
 
             st.write("Confidence:", round(confidence * 100, 2), "%")
+
+            prompt = emotion_prompts.get(
+                emotion.lower(),
+                "A surreal emotional artistic masterpiece"
+            )
+
+            with st.spinner("Generating artwork..."):
+
+                image = generate_image_api(prompt)
+
+            st.image(
+                image,
+                caption=f"Generated artwork for emotion: {emotion}",
+                use_container_width=True
+            )
 
         else:
 
